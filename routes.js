@@ -14,4 +14,13 @@ module.exports = function(app){
 
     app.route('/getShopDetails/:id')
         .get(myjson.getShopDetails);
+
+    app.route('/getStockDetails/:id')
+        .get(myjson.getStockDetails);
+
+    app.route('/editStock/:id')
+        .put(myjson.editStock);
+
+    app.route('/editPrice/:id')
+        .put(myjson.editPrice);
 }
