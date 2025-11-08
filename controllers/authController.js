@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../connection');
 const resHelper = require('../res');
+const { param } = require('../routes/authRoutes');
 
 exports.registerUser = async(req,res) =>{
     const {user_name, email, password, role} = req.body
@@ -54,6 +55,18 @@ exports.getUserProfile = async(req,res) =>{
         resHelper.ok(user[0], res);
     }catch(error){
         res.status(500).json({message:'Server Error'});
+    }
+
+};
+
+exports.addCart = async (req,res) => {
+    const id_product = req.params.id;
+    const user_id = req.user.id;
+
+    try{
+        const [cartItem] = await db.promise().query('INSERT INTO cart(user_id, product_id, quantity) VALUES(?,?,?)', [user_id,product_id,1])
+    }catch(error){
+
     }
 
 };
