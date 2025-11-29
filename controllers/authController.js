@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../connection');
 const resHelper = require('../res');
 const { param } = require('../routes/authRoutes');
+const { validationResult } = require('express-validator');
 
 exports.registerUser = async(req,res) =>{
     const {user_name, email, password, role} = req.body
@@ -59,14 +60,63 @@ exports.getUserProfile = async(req,res) =>{
 
 };
 
-exports.addCart = async (req,res) => {
-    const id_product = req.params.id;
-    const user_id = req.user.id;
+exports.getCart = async(req,res) =>{
 
     try{
-        const [cartItem] = await db.promise().query('INSERT INTO cart(user_id, product_id, quantity) VALUES(?,?,?)', [user_id,product_id,1])
+
     }catch(error){
 
     }
+};
+
+exports.addItem = async (req,res) => {
+    const id_product = req.params.id;
+    
+
+    try{
+        const userId = req.user?.id||null;
+        const {product_id, quantity = quantity, metadata} = req.body;
+        if (!product_id||quantity <= 0) return res.status(400).json({error:'invalid payload'});
+        let cart;
+        if(userId){
+            const [crows] = await db.query('SELECT * FROM carts WHERE user_id = ? AND status = "active" LIMIT 1', [userId] );
+            cart = crows[0];
+
+            if(!cart){
+                const [ins] = await db.query('INSERT INTO carts(user_id VALUES(?)', [userId]);
+                cart = {id: ins,insertId};
+            }
+        }else{
+            const sessionId = req.body.sessionId;
+            if(!sessionId) return res.status(400).json({error:'session_id required for guest cart'});
+            const [crows] = await db.query('SELECT * FROM carts WHERE session_id =? AND status ="active" LIMIT 1', [sessionId]);
+            cart = crows[0];
+            if(!cart){
+                const [ins] = await db.query('INSERT INTO carts(session_id) VALUES (?)', [sessionId]);
+                cart = {id:ins.insertId};
+            }
+        }
+
+        const [prows] = await db.query('SELECT id, price, stock FROM products WHERE id = ? LIMIT 1', [product_id]);
+        const product = prows[0]
+        if(!product) return res.status(404).json({error: 'product not found'});
+        if(product.stock < quantity) return res.status(400).json({error: 'insufficient stock'});
+
+        const  [exorws] = await db.query('SELECT  FROM cart_items WHERE cart_id =? AND product_id = ? LIMIT 1', [cart.id,product_id]);
+        if (exorws.length){
+            const newQty = exorws[0].quantity+quantity;
+            await db.query('UPDATE cart)items SET quantity = ?, price =? WHERE id =?', [newQty,product.price,exorws[0].id]);
+        }else{
+            await db.query('INSERT INTO cart_item (cart_id, product_id, quantity, price, metadata) VALUES (?,?,?,?,?)', [cart.id,product_id,quantity,product.price,JSON,stringify(metadata || {})]);
+        }
+        
+        if(userId) return await this.getCart(req, res);
+        return res.json({success: true});
+
+    }catch(error){
+        console.error(err)
+        res.status(500).json({error:'server error'});
+    }
 
 };
+
