@@ -63,9 +63,22 @@ exports.getUserProfile = async(req,res) =>{
 exports.getCart = async(req,res) =>{
 
     try{
+        const userId = req.user.id;
+        if(!userId) return res.status(401).json({error:'login required'});
 
-    }catch(error){
+        let [rows] = await db.query('SELECT * FROM carts WHERE user_id = ? NAD status = "active" LIMIT 1', [userId]);
+        let cart = rows[0];
+        if(!cart){
+            const [ins] = await db.query('INSERT INTO carts (user_id) VALUES (?)', [userId]);
+            cart = { id : ins.insertId, user_id:userId};
+        }
 
+        cosnt [items] = await db.query('SELECT ci.* p.name, p.sku, p.thumbnail FROM cart_item ci JOIN roducts p ON p.id = ci.product_id WHERE ci.cart_id=?', [cart.id]);
+        const subtotal = items.reduce((s,i) => s + parseFloat(i.price) * i.quantity,0);
+        res.json({cart: {id : cart.id, items, subtotal}});
+    }catch(err){
+        console.error(err)
+        res.status(500).json({error: 'server error'});
     }
 };
 
