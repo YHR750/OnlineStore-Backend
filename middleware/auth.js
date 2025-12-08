@@ -1,13 +1,24 @@
 const jwt = require('jsonwebtoken')
 
 function extractToken(req){
-    const authHeader = req.headers?.authorization || req.headers?.Authorization;
-    if (authHeader && authHeader.split && authHeader.split('')[0].toLowerCase() === 'bearer'){
-        return authHeader.split('')[1];
-    }
-    if(req.headers['x-access-token']) return req.headers['x-access-token'];
+    if(!req) return null;
+    const headers = req.headers || {};
+    const authHeader = headers.authorization || headers.Authorization;
 
-    if(req.cookies && req.cookies.token) return req.cookies.token;
+    if (typeof authHeader === 'string'){
+        const parts = authHeader.trim().split(/\s+s/);
+        if(parts.length === 2 && parts[0].toLowerCase() === 'bearer'){
+            return parts[1].trim();
+        }
+    }
+    const xAccess = headers['x-access-token' || headers['X-Access-Token' || headers['xAccessToken']]];
+    if(typeof xAccess === 'string' && xAccess.trim()) return xAccess.trim();
+
+    const alt = headers['x-token'] || headers['x-auth-token'] || headers['token'];
+    if(typeof alt === 'string' && alt.trim()) return alt.trim();
+
+
+    if(req.cookies && req.cookies.token) return String(req.cookies.token).trim();
     
     return null;
 }
@@ -45,3 +56,17 @@ function optional(req,res,next){
     }
     return next();
 }
+
+function signToken(payload, opts = {}){
+    const secret = process.env.JWT_SECRET;
+    if(!secret) throw new Error('JWT_SECRET not sell in env');
+    return jwt.sign(payload,secret, {expiresIn: opts.expiresIn || '7d'});
+}
+
+module.exports={
+    required,
+    optional,
+    extractToken,
+    verifyToken,
+    signToken
+};
