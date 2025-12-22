@@ -133,3 +133,85 @@ exports.addItem = async (req,res) => {
 
 };
 
+async function updateItem(req, res){
+    try{
+        const userId = req.user?.id;
+        if(!userId) return res.status(401).json({error : 'login reqired'});
+
+        const itemId = req.params.itemId;
+        const { quantity } = req.body;
+        if(!itemId || quantity == null || quantity < 1) return res.status(400).json({error : ' invalid payload'});
+
+        const [itemRows] = await db.query('SELECT ci. * FROM cart_items ci JOIN carts c ON c.id = ci.cart_id WHERE ci.id = ? AND c.user_id = ? AND c.status = "active" LIMIT 1', [itemId, userId]);
+
+        const item = itemRows[0];
+        if(!item) return res.status(404).json({error : ' item not found'});
+
+        const[pRows] = await db.query('SELECT stock FROM products WHERE id = ? LIMIT 1', [item.product_id]);
+
+        if(pRows[0].stock < quantity) return res.status(400).json({error : 'insufficient stock'});
+
+        await db.query('UPDATE cart_items SET quantity = ? WHERE id = ?', [quantity, itemId]);
+        return await getCart(req,res);
+    }catch(err){
+        console.log(err);
+        res.status(500).json({error : 'server error'});
+    }
+};
+
+async function removeItem(req, res) {
+    try{
+        const userId = req.user?.id;
+        if(!userId) return res.status(401).json({error : 'login reqired'});
+
+        const itemId = req.parms.itemId;
+        if(!itemId) return res.status(400).json({error : 'invalid item id'});
+
+        await db.query('DELETE ci FROM cart_items ci JOIN carts c ON c.id = ci.cart_id WHERE ci.id = ? AND c.user_id = ? AND c.status = "active"', [itemId, userId]);
+
+        return await getCart(req,res);
+    }catch(err){
+        console.error(err);
+        res.status(500).json({error : 'Server error'})
+    }
+}
+
+async function mergeCart(req,res) {
+    try{
+        const userId = req.user?.id;
+        if(!userId) return res.status(401).json({error : 'login reqired'});
+
+        const {items} = req.body;
+        if(!Array.isArray(items) || !items.length) return await getCart(req,res);
+
+        const [crows] = await db.query('SELECT * FROM carts WHERE user_id = ? AND status = "active" LIMIT 1', [userId]);
+        let cart = crows[0];
+        if(!cart){
+            const[ins] = await db.query('INSERT INTO carts (user_id) VALUES (?)', [userId]);
+            cart = { id: ins.insertId};
+        }
+
+        for(const it of items){
+            const product_id = parseInt(it.product_id, 10);
+            const quantity = parseInt(it.quantity, 10) || 1;
+            
+            if (!product_id) continue;
+            const [prows] = await db.query('SELECT id, price, stock, FROM products WHERE id = ? LIMIT 1', [product_id]);
+            const product = prows[0];
+            if (!product) continue;
+                const useQty = Math.min(quantity, product.stock);
+                const [ex] = await db.query('SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ? LIMIT 1', [cart.id, product_id]);
+                if(ex.length){
+                    const newQTY = ex[0].quantity + useQty;
+                    await db.query('UPDATE cart_items SET quantity = ?, price = ? WHERE id = ?', [newQty, product.price,ex[0].id]);
+                }else{
+                    await db.query('INSERT INTO cart_items (cart_id, product_id, quantity, price, metadata) VALUES (?,?,?,?,?)', [cart.id,product_id,useQty,product.price, JSON.stringify(it.metadata||{})]);
+                }
+
+        }
+
+        return await getCart(req,res);
+    }catch(err){
+        
+    }
+};
