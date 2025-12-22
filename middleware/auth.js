@@ -32,7 +32,7 @@ function verifyToken(token){
 }
 
 function require(req,res,next){
-    try{
+    /*try{
         const token = extractToken(req);
         if(!token) return res.status(401).json({error : 'authentication required'});
         const payload = verifyToken(token);
@@ -42,6 +42,20 @@ function require(req,res,next){
         console.error('auth.required error:', err.message || err);
         return res.status(401).json({error: 'invalid or expired token'});
 
+    }*/
+
+    const header = req.headers.authorization;
+    if(!header) return res.status(401).json({error: 'authorization header missing'});
+
+    const token = header.split('')[1];
+    if(!token) return res.status(401).json({error:'token missing'});
+
+    try{
+        const decoded = jwt.verify(token, 'jwtsecret');
+        req.user = decoded;
+        next();
+    }catch(err){
+        return res.status(401).json({error:'invalid or expired token'});
     }
 }
 
@@ -64,7 +78,7 @@ function signToken(payload, opts = {}){
 }
 
 module.exports={
-    required,
+    require,
     optional,
     extractToken,
     verifyToken,
